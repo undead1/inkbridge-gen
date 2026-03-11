@@ -3,7 +3,7 @@
  * Plugin Name: Inkbridge Generator
  * Plugin URI: https://github.com/undead1/inkbridge-gen
  * Description: AI-powered content generation, translation, and publishing pipeline for WordPress. Supports OpenAI, Claude, and Gemini.
- * Version: 1.4.0
+ * Version: 1.4.1
  * Author: Inkbridge Generator
  * Author URI: https://github.com/undead1/inkbridge-gen
  * License: GPL-2.0+
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'INKBRIDGE_GEN_VERSION', '1.4.0' );
+define( 'INKBRIDGE_GEN_VERSION', '1.4.1' );
 define( 'INKBRIDGE_GEN_FILE', __FILE__ );
 define( 'INKBRIDGE_GEN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'INKBRIDGE_GEN_URL', plugin_dir_url( __FILE__ ) );
