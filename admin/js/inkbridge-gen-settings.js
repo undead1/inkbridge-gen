@@ -193,6 +193,106 @@
 		$tbody.append(html);
 	});
 
+	// Generate pillars from categories.
+	$(document).on('click', '#inkbridge-gen-generate-pillars', function(e) {
+		e.preventDefault();
+		var $btn = $(this);
+
+		// Show inline WP-style confirmation if not yet confirmed.
+		if (!$btn.data('confirmed')) {
+			var $confirm = $('<div class="notice notice-warning inline inkbridge-gen-generate-confirm" style="margin:12px 0;padding:10px 14px;display:flex;align-items:center;gap:12px;">' +
+				'<p style="margin:0;flex:1;">This will add/update pillars based on your WordPress categories using AI.</p>' +
+				'<button type="button" class="button button-primary inkbridge-gen-confirm-yes">Continue</button>' +
+				'<button type="button" class="button inkbridge-gen-confirm-no">Cancel</button>' +
+				'</div>');
+			$btn.closest('p').after($confirm);
+			$btn.prop('disabled', true);
+
+			$confirm.on('click', '.inkbridge-gen-confirm-yes', function() {
+				$confirm.remove();
+				$btn.data('confirmed', true).prop('disabled', false).trigger('click');
+			});
+			$confirm.on('click', '.inkbridge-gen-confirm-no', function() {
+				$confirm.remove();
+				$btn.prop('disabled', false);
+			});
+			return;
+		}
+
+		$btn.data('confirmed', false);
+		var $status = $('#inkbridge-gen-generate-pillars-status');
+		var $tbody = $('#inkbridge-gen-pillars-body');
+
+		$btn.prop('disabled', true);
+		$status.text('Generating...').removeClass('success error');
+
+		InkbridgeGen.ajax('inkbridge_gen_generate_pillars')
+		.done(function(response) {
+			if (response.success && response.data.pillars) {
+				var pillars = response.data.pillars;
+
+				// Get language codes from existing header or language settings.
+				var langCodes = [];
+				$('#inkbridge-gen-pillars-table thead th').each(function() {
+					var text = $(this).text();
+					var match = text.match(/Category \((.+)\)/);
+					if (match) langCodes.push(match[1]);
+				});
+
+				pillars.forEach(function(pillar) {
+					// Check if a row with this key already exists.
+					var $existingRow = null;
+					$tbody.find('tr').each(function() {
+						var $row = $(this);
+						var keyInput = $row.find('input[name*="[key]"], [name="pillar_key"]');
+						if (keyInput.length && keyInput.val() === pillar.key) {
+							$existingRow = $row;
+							return false;
+						}
+					});
+
+					if ($existingRow) {
+						// Update existing row.
+						$existingRow.find('input[name*="[label]"], [name="pillar_label"]').val(pillar.label);
+						$existingRow.find('textarea[name*="[context]"], [name="pillar_context"]').val(pillar.context || '');
+						// Update category mappings.
+						langCodes.forEach(function(code) {
+							var slug = (pillar.categories && pillar.categories[code]) || '';
+							$existingRow.find('input[name*="[categories][' + code + ']"], [data-lang-cat="' + code + '"]').val(slug);
+						});
+					} else {
+						// Create new row matching the Add Pillar pattern.
+						var html = '<tr class="inkbridge-gen-pillar-row">' +
+							'<td><input type="text" name="pillar_key" value="' + $('<span>').text(pillar.key).html() + '" size="10" /></td>' +
+							'<td><input type="text" name="pillar_label" value="' + $('<span>').text(pillar.label).html() + '" /></td>';
+						langCodes.forEach(function(code) {
+							var slug = (pillar.categories && pillar.categories[code]) || '';
+							html += '<td><input type="text" data-lang-cat="' + code + '" value="' + $('<span>').text(slug).html() + '" size="12" /></td>';
+						});
+						html += '<td><textarea name="pillar_context" rows="2" cols="30">' + $('<span>').text(pillar.context || '').html() + '</textarea></td>' +
+							'<td><a href="#" class="inkbridge-gen-remove-row remove-row">&times;</a></td>' +
+							'</tr>';
+						$tbody.append(html);
+					}
+				});
+
+				$status.text(response.data.message).addClass('success');
+				InkbridgeGen.notify(response.data.message);
+			} else {
+				var msg = (response.data && response.data.message) || 'Failed to generate pillars.';
+				$status.text(msg).addClass('error');
+				InkbridgeGen.notify(msg, 'error');
+			}
+		})
+		.fail(function() {
+			$status.text('Request failed.').addClass('error');
+			InkbridgeGen.notify('Failed to generate pillars.', 'error');
+		})
+		.always(function() {
+			$btn.prop('disabled', false);
+		});
+	});
+
 	// Remove row.
 	$(document).on('click', '.inkbridge-gen-remove-row', function(e) {
 		e.preventDefault();

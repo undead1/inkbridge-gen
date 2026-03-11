@@ -18,6 +18,7 @@ class Inkbridge_Gen_Admin_Ajax {
 			'inkbridge_gen_clear_queue',
 			'inkbridge_gen_test_provider',
 			'inkbridge_gen_suggest_topic',
+			'inkbridge_gen_generate_pillars',
 			'inkbridge_gen_save_settings',
 		);
 
@@ -365,6 +366,184 @@ class Inkbridge_Gen_Admin_Ajax {
 			$topic  = trim( $result['content'], " \t\n\r\0\x0B\"'" );
 
 			wp_send_json_success( array( 'topic' => $topic ) );
+		} catch ( \Throwable $e ) {
+			wp_send_json_error( array( 'message' => $e->getMessage() ) );
+		}
+	}
+
+	// ─── Pillar Generation ──────────────────────────────
+
+	public function generate_pillars() {
+		$this->verify_request();
+
+		$settings  = new Inkbridge_Gen_Settings();
+
+		// Check text provider is configured.
+		$tp_id  = $settings->get_active_text_provider();
+		$tp_key = $settings->get_provider_api_key( $tp_id );
+		if ( ! $tp_id || ! $tp_key ) {
+			wp_send_json_error( array( 'message' => __( 'No text provider configured. Please set up a text provider with an API key in Text Providers settings first.', 'inkbridge-gen' ) ) );
+		}
+
+		$languages = $settings->get_languages();
+
+		if ( empty( $languages ) ) {
+			wp_send_json_error( array( 'message' => __( 'No languages configured. Please set up languages first.', 'inkbridge-gen' ) ) );
+		}
+
+		// Collect language parent category slugs to exclude.
+		$lang_parent_slugs = array();
+		$lang_parent_ids   = array();
+		foreach ( $languages as $lang ) {
+			if ( ! empty( $lang['parent_category'] ) ) {
+				$lang_parent_slugs[] = $lang['parent_category'];
+				$term = get_category_by_slug( $lang['parent_category'] );
+				if ( $term ) {
+					$lang_parent_ids[ $lang['code'] ] = $term->term_id;
+				}
+			}
+		}
+
+		// Get all categories.
+		$all_cats = get_categories( array(
+			'hide_empty' => false,
+			'orderby'    => 'name',
+			'order'      => 'ASC',
+		) );
+
+		if ( empty( $all_cats ) ) {
+			wp_send_json_error( array( 'message' => __( 'No WordPress categories found.', 'inkbridge-gen' ) ) );
+		}
+
+		// Group categories by language parent.
+		$cats_by_lang  = array();
+		$uncategorized = array();
+
+		foreach ( $all_cats as $cat ) {
+			// Skip the language parent categories themselves.
+			if ( in_array( $cat->slug, $lang_parent_slugs, true ) ) {
+				continue;
+			}
+			// Skip "Uncategorized" default category.
+			if ( 'uncategorized' === $cat->slug ) {
+				continue;
+			}
+
+			$assigned = false;
+			foreach ( $lang_parent_ids as $lang_code => $parent_id ) {
+				if ( (int) $cat->parent === $parent_id ) {
+					$cats_by_lang[ $lang_code ][] = $cat->name . ' (' . $cat->slug . ')';
+					$assigned = true;
+					break;
+				}
+			}
+			if ( ! $assigned ) {
+				$uncategorized[] = $cat->name . ' (' . $cat->slug . ')';
+			}
+		}
+
+		if ( empty( $cats_by_lang ) && empty( $uncategorized ) ) {
+			wp_send_json_error( array( 'message' => __( 'No usable categories found (only language parents or uncategorized).', 'inkbridge-gen' ) ) );
+		}
+
+		// Build language info string.
+		$lang_info = array();
+		foreach ( $languages as $lang ) {
+			$lang_info[] = $lang['code'] . ' (' . $lang['name'] . ')';
+		}
+
+		// Build category listing for prompt.
+		$cat_listing = '';
+		foreach ( $cats_by_lang as $lang_code => $cats ) {
+			$lang_name = '';
+			foreach ( $languages as $lang ) {
+				if ( $lang['code'] === $lang_code ) {
+					$lang_name = $lang['name'];
+					break;
+				}
+			}
+			$cat_listing .= 'Categories under "' . $lang_name . '" (' . $lang_code . '): ' . implode( ', ', $cats ) . "\n";
+		}
+		if ( ! empty( $uncategorized ) ) {
+			$cat_listing .= 'Other categories (not under any language): ' . implode( ', ', $uncategorized ) . "\n";
+		}
+
+		// Existing pillars for context.
+		$existing_pillars = $settings->get_pillars();
+		$existing_info    = '';
+		if ( ! empty( $existing_pillars ) ) {
+			$pillar_descs = array();
+			foreach ( $existing_pillars as $p ) {
+				$pillar_descs[] = $p['key'] . ' ("' . $p['label'] . '")';
+			}
+			$existing_info = "\nExisting pillars: " . implode( ', ', $pillar_descs ) . "\n";
+		}
+
+		$lang_codes = wp_json_encode( array_map( fn( $l ) => $l['code'], $languages ) );
+
+		$system_prompt = 'You are a content strategist. Analyze WordPress categories and suggest unified content pillars. Return ONLY a valid JSON array, no other text.';
+
+		$user_prompt = "Analyze these WordPress categories and create unified content pillars.\n\n"
+			. "Configured languages: " . implode( ', ', $lang_info ) . "\n\n"
+			. $cat_listing
+			. $existing_info
+			. "\nInstructions:\n"
+			. "- Group related categories across languages into unified pillars (e.g. 'technology' in English and 'teknologi' in Malay = one pillar)\n"
+			. "- Pillar keys and labels must be in English\n"
+			. "- Keys should be lowercase, hyphenated slugs\n"
+			. "- Each pillar needs a short context description (1-2 sentences) for guiding AI content generation\n"
+			. "- Map each pillar to the corresponding category slug for each language: " . $lang_codes . "\n"
+			. "- Do NOT create separate pillars for the same concept in different languages\n"
+			. "- If existing pillars match, keep their keys\n"
+			. "\nReturn a JSON array:\n"
+			. '[{"key":"technology","label":"Technology","context":"Articles about tech trends and innovation","categories":{"en":"technology","ms":"teknologi"}}]';
+
+		try {
+			$tp_cfg = $settings->get_text_provider_config( $tp_id );
+			$text_provider = Inkbridge_Gen_Provider_Factory::create_text_provider( $tp_id, $tp_key, $tp_cfg['model'] ?? '' );
+
+			$result  = $text_provider->generate( $system_prompt, $user_prompt, 2000 );
+			$content = trim( $result['content'] );
+
+			// Extract JSON from response (handle markdown code blocks).
+			if ( preg_match( '/\[[\s\S]*\]/', $content, $matches ) ) {
+				$content = $matches[0];
+			}
+
+			$pillars = json_decode( $content, true );
+
+			if ( ! is_array( $pillars ) || empty( $pillars ) ) {
+				wp_send_json_error( array( 'message' => __( 'AI returned invalid data. Please try again.', 'inkbridge-gen' ) ) );
+			}
+
+			// Sanitize the response.
+			$clean_pillars = array();
+			foreach ( $pillars as $p ) {
+				if ( empty( $p['key'] ) || empty( $p['label'] ) ) {
+					continue;
+				}
+				$cats = array();
+				if ( ! empty( $p['categories'] ) && is_array( $p['categories'] ) ) {
+					foreach ( $p['categories'] as $lc => $slug ) {
+						$cats[ sanitize_key( $lc ) ] = sanitize_title( $slug );
+					}
+				}
+				$clean_pillars[] = array(
+					'key'        => sanitize_key( $p['key'] ),
+					'label'      => sanitize_text_field( $p['label'] ),
+					'context'    => sanitize_text_field( $p['context'] ?? '' ),
+					'categories' => $cats,
+				);
+			}
+
+			if ( empty( $clean_pillars ) ) {
+				wp_send_json_error( array( 'message' => __( 'No valid pillars generated. Please try again.', 'inkbridge-gen' ) ) );
+			}
+
+			wp_send_json_success( array(
+				'pillars' => $clean_pillars,
+				'message' => sprintf( __( '%d pillars generated.', 'inkbridge-gen' ), count( $clean_pillars ) ),
+			) );
 		} catch ( \Throwable $e ) {
 			wp_send_json_error( array( 'message' => $e->getMessage() ) );
 		}

@@ -72,6 +72,10 @@ $languages = $settings->get_languages();
 		<button type="button" id="inkbridge-gen-add-pillar" class="button button-secondary">
 			<?php esc_html_e( 'Add Pillar', 'inkbridge-gen' ); ?>
 		</button>
+		<button type="button" id="inkbridge-gen-generate-pillars" class="button button-secondary" style="margin-left: 8px;">
+			<?php esc_html_e( 'Generate from Categories', 'inkbridge-gen' ); ?>
+		</button>
+		<span id="inkbridge-gen-generate-pillars-status" style="margin-left: 8px;"></span>
 	</p>
 
 	<!-- Template row for JS (hidden) -->
