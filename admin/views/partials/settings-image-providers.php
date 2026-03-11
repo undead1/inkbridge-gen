@@ -8,7 +8,7 @@ $providers = array(
 	'unsplash'      => array(
 		'label'     => 'Unsplash',
 		'help_url'  => 'https://unsplash.com/developers',
-		'help_text' => __( 'Register a free developer account to get an Access Key. Free for up to 50 requests/hour.', 'inkbridge-gen' ),
+		'help_text' => __( 'Register a free developer account and use the Access Key (not the Secret Key). Free for up to 50 requests/hour.', 'inkbridge-gen' ),
 	),
 	'shutterstock'  => array(
 		'label'     => 'Shutterstock',
@@ -77,7 +77,7 @@ $providers = array(
 						<th scope="row"></th>
 						<td>
 							<button type="button" class="button button-secondary inkbridge-gen-test-provider"
-									data-provider="<?php echo esc_attr( $pid ); ?>">
+									data-provider="<?php echo esc_attr( $pid ); ?>" data-type="image">
 								<?php esc_html_e( 'Test Connection', 'inkbridge-gen' ); ?>
 							</button>
 							<span class="inkbridge-gen-test-result" data-provider="<?php echo esc_attr( $pid ); ?>"></span>

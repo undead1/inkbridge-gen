@@ -131,7 +131,7 @@
 		var $btn = $(this);
 		var providerId = $btn.data('provider');
 		var providerType = $btn.data('type') || 'text';
-		var apiKey = $btn.closest('.inkbridge-gen-provider-section').find('input[type="password"]').val();
+		var apiKey = $btn.closest('.inkbridge-gen-provider-config').find('input[type="password"]').val();
 		var $result = $btn.siblings('.inkbridge-gen-test-result');
 
 		$btn.prop('disabled', true);
