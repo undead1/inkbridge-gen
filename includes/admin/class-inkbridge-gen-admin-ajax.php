@@ -346,7 +346,10 @@ class Inkbridge_Gen_Admin_Ajax {
 		$pillar_label   = $pillar_data['label'] ?? '';
 		$pillar_context = $pillar_data['context'] ?? '';
 
-		$system_prompt = 'You are a content strategist. Suggest a single, specific article topic. Reply with ONLY the topic text, nothing else — no quotes, no numbering, no explanation.';
+		// Use configured generation system prompt for site-specific context.
+		$system_prompt = $settings->get_prompt( 'generate_system' );
+		$system_prompt = str_replace( '{{pillar_context}}', $pillar_context, $system_prompt );
+		$system_prompt .= "\n\nYour task now is to suggest a single, specific article topic. Reply with ONLY the topic text, nothing else — no quotes, no numbering, no explanation.";
 
 		$user_prompt = 'Suggest one specific, engaging article topic';
 		if ( $pillar_label ) {
