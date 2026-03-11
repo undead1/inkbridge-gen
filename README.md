@@ -2,6 +2,8 @@
 
 AI-powered content generation, translation, and publishing pipeline for WordPress. Supports OpenAI, Claude, and Gemini for text generation, and Unsplash, Shutterstock, and Depositphotos for featured images.
 
+[Learn more](https://inkbridge.my/inkbridge-gen-product/) · [Releases](https://github.com/undead1/inkbridge-gen/releases)
+
 ## Requirements
 
 - WordPress 6.0+
