@@ -21,7 +21,7 @@ AI-powered content generation, translation, and publishing pipeline for WordPres
 - **Auto-updates** — Receive update notifications directly in wp-admin via GitHub releases
 - **Encrypted API keys** — AES-256-CBC encryption for all stored provider credentials
 - **Customizable prompts** — Full control over generation and translation prompts with placeholder support
-- **Content pillars** — Organize content by pillars with per-language category mapping
+- **Content pillars** — Organize content by pillars with per-language category mapping, or auto-generate pillars from existing WordPress categories using AI
 - **Logging & monitoring** — Track API calls, token usage, errors, and durations with filterable log viewer
 
 ## Installation
@@ -51,7 +51,7 @@ Configure at **Inkbridge Generator > Settings > Image Providers**. Set orientati
 
 | Provider | Auth Type | Notes | Get API Key |
 |----------|-----------|-------|-------------|
-| Unsplash | Access Key | Free for up to 50 requests/hour | [unsplash.com/developers](https://unsplash.com/developers) |
+| Unsplash | Access Key (not Secret Key) | Free for up to 50 requests/hour | [unsplash.com/developers](https://unsplash.com/developers) |
 | Shutterstock | Bearer token | Requires active subscription for licensing | [shutterstock.com/developers](https://www.shutterstock.com/developers) |
 | Depositphotos | API key | Requires deposit or subscription | [depositphotos.com/api-integration](https://depositphotos.com/api-integration.html) |
 
@@ -64,6 +64,8 @@ Articles are generated in the source language first, then translated to all othe
 ### Content Pillars
 
 Configure at **Inkbridge Generator > Settings > Categories**. Each pillar maps to a WordPress category per language. Pillar context is injected into AI prompts to guide content tone and focus.
+
+Click **Generate from Categories** to auto-generate pillars from your existing WordPress categories using AI. The system analyzes your category structure, excludes language parent categories, and creates unified, language-agnostic pillars with per-language category mappings. Existing pillars with matching keys are updated rather than duplicated.
 
 ### Prompts
 
