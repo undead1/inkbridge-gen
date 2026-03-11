@@ -70,28 +70,36 @@
 
 			case 'languages':
 				data.languages = [];
-				$form.find('.inkbridge-gen-language-row').each(function() {
+				$('#inkbridge-gen-languages-body tr').each(function() {
+					var $row = $(this);
+					var inputs = $row.find('input');
 					data.languages.push({
-						code: $(this).find('[name="lang_code"]').val(),
-						name: $(this).find('[name="lang_name"]').val(),
-						hreflang: $(this).find('[name="lang_hreflang"]').val(),
-						parent_category: $(this).find('[name="lang_parent_category"]').val(),
-						is_source: $(this).find('[name="lang_is_source"]').is(':checked')
+						code: inputs.filter('[name$="[code]"]').val(),
+						name: inputs.filter('[name$="[name]"]').val(),
+						hreflang: inputs.filter('[name$="[hreflang]"]').val(),
+						parent_category: inputs.filter('[name$="[parent_category]"]').val(),
+						is_source: inputs.filter('[name$="[is_source]"]').is(':checked')
 					});
 				});
 				break;
 
 			case 'pillars':
 				data.pillars = [];
-				$form.find('.inkbridge-gen-pillar-row').each(function() {
+				$('#inkbridge-gen-pillars-body tr').each(function() {
+					var $row = $(this);
 					var pillar = {
-						key: $(this).find('[name="pillar_key"]').val(),
-						label: $(this).find('[name="pillar_label"]').val(),
-						context: $(this).find('[name="pillar_context"]').val(),
+						key: $row.find('input[name$="[key]"]').val(),
+						label: $row.find('input[name$="[label]"]').val(),
+						context: $row.find('textarea').val(),
 						categories: {}
 					};
-					$(this).find('[data-lang-cat]').each(function() {
-						pillar.categories[$(this).data('lang-cat')] = $(this).val();
+					// Match inputs with name pattern like pillars[N][categories][en].
+					$row.find('input[name*="[categories]"]').each(function() {
+						var name = $(this).attr('name');
+						var match = name.match(/\[categories\]\[(\w+)\]/);
+						if (match) {
+							pillar.categories[match[1]] = $(this).val();
+						}
 					});
 					data.pillars.push(pillar);
 				});
@@ -160,14 +168,15 @@
 	// Add language row.
 	$(document).on('click', '#inkbridge-gen-add-language', function(e) {
 		e.preventDefault();
-		var $tbody = $(this).closest('.inkbridge-gen-settings-form').find('.inkbridge-gen-languages-tbody');
-		var html = '<tr class="inkbridge-gen-language-row">' +
-			'<td><input type="text" name="lang_code" value="" size="4" /></td>' +
-			'<td><input type="text" name="lang_name" value="" /></td>' +
-			'<td><input type="text" name="lang_hreflang" value="" size="8" /></td>' +
-			'<td><input type="text" name="lang_parent_category" value="" size="10" /></td>' +
-			'<td><input type="checkbox" name="lang_is_source" /></td>' +
-			'<td><a href="#" class="inkbridge-gen-remove-row remove-row">&times;</a></td>' +
+		var $tbody = $('#inkbridge-gen-languages-body');
+		var index = $tbody.find('tr').length;
+		var html = '<tr data-index="' + index + '">' +
+			'<td><input type="text" name="languages[' + index + '][code]" class="small-text" placeholder="en" /></td>' +
+			'<td><input type="text" name="languages[' + index + '][name]" class="regular-text" placeholder="English" /></td>' +
+			'<td><input type="text" name="languages[' + index + '][hreflang]" class="small-text" placeholder="en-US" /></td>' +
+			'<td><input type="text" name="languages[' + index + '][parent_category]" class="regular-text" placeholder="english" /></td>' +
+			'<td><input type="checkbox" name="languages[' + index + '][is_source]" value="1" class="inkbridge-gen-source-checkbox" /></td>' +
+			'<td><button type="button" class="button button-small inkbridge-gen-remove-language">Remove</button></td>' +
 			'</tr>';
 		$tbody.append(html);
 	});
@@ -175,20 +184,23 @@
 	// Add pillar row.
 	$(document).on('click', '#inkbridge-gen-add-pillar', function(e) {
 		e.preventDefault();
-		var $tbody = $(this).closest('.inkbridge-gen-settings-form').find('.inkbridge-gen-pillars-tbody');
+		var $tbody = $('#inkbridge-gen-pillars-body');
+		var index = $tbody.find('tr').length;
+
+		// Get language codes from pillar table headers.
 		var langCodes = [];
-		$('.inkbridge-gen-languages-tbody .inkbridge-gen-language-row').each(function() {
-			langCodes.push($(this).find('[name="lang_code"]').val());
+		$('#inkbridge-gen-pillars-table thead th[data-lang-code]').each(function() {
+			langCodes.push($(this).data('lang-code'));
 		});
 
-		var html = '<tr class="inkbridge-gen-pillar-row">' +
-			'<td><input type="text" name="pillar_key" value="" size="10" /></td>' +
-			'<td><input type="text" name="pillar_label" value="" /></td>';
+		var html = '<tr data-index="' + index + '">' +
+			'<td><input type="text" name="pillars[' + index + '][key]" class="small-text" placeholder="pillar-key" /></td>' +
+			'<td><input type="text" name="pillars[' + index + '][label]" class="regular-text" placeholder="Pillar Label" /></td>';
 		langCodes.forEach(function(code) {
-			html += '<td><input type="text" data-lang-cat="' + code + '" value="" size="12" /></td>';
+			html += '<td><input type="text" name="pillars[' + index + '][categories][' + code + ']" class="small-text" placeholder="' + code + '-slug" /></td>';
 		});
-		html += '<td><textarea name="pillar_context" rows="2" cols="30"></textarea></td>' +
-			'<td><a href="#" class="inkbridge-gen-remove-row remove-row">&times;</a></td>' +
+		html += '<td><textarea name="pillars[' + index + '][context]" rows="2" class="large-text"></textarea></td>' +
+			'<td><button type="button" class="button button-small inkbridge-gen-remove-pillar">Remove</button></td>' +
 			'</tr>';
 		$tbody.append(html);
 	});
@@ -231,20 +243,20 @@
 			if (response.success && response.data.pillars) {
 				var pillars = response.data.pillars;
 
-				// Get language codes from existing header or language settings.
+				// Get language codes from existing header.
 				var langCodes = [];
-				$('#inkbridge-gen-pillars-table thead th').each(function() {
-					var text = $(this).text();
-					var match = text.match(/Category \((.+)\)/);
-					if (match) langCodes.push(match[1]);
+				$('#inkbridge-gen-pillars-table thead th[data-lang-code]').each(function() {
+					langCodes.push($(this).data('lang-code'));
 				});
+
+				var nextIndex = $tbody.find('tr').length;
 
 				pillars.forEach(function(pillar) {
 					// Check if a row with this key already exists.
 					var $existingRow = null;
 					$tbody.find('tr').each(function() {
 						var $row = $(this);
-						var keyInput = $row.find('input[name*="[key]"], [name="pillar_key"]');
+						var keyInput = $row.find('input[name$="[key]"]');
 						if (keyInput.length && keyInput.val() === pillar.key) {
 							$existingRow = $row;
 							return false;
@@ -253,24 +265,25 @@
 
 					if ($existingRow) {
 						// Update existing row.
-						$existingRow.find('input[name*="[label]"], [name="pillar_label"]').val(pillar.label);
-						$existingRow.find('textarea[name*="[context]"], [name="pillar_context"]').val(pillar.context || '');
+						$existingRow.find('input[name$="[label]"]').val(pillar.label);
+						$existingRow.find('textarea').val(pillar.context || '');
 						// Update category mappings.
 						langCodes.forEach(function(code) {
 							var slug = (pillar.categories && pillar.categories[code]) || '';
-							$existingRow.find('input[name*="[categories][' + code + ']"], [data-lang-cat="' + code + '"]').val(slug);
+							$existingRow.find('input[name*="[categories][' + code + ']"]').val(slug);
 						});
 					} else {
-						// Create new row matching the Add Pillar pattern.
-						var html = '<tr class="inkbridge-gen-pillar-row">' +
-							'<td><input type="text" name="pillar_key" value="' + $('<span>').text(pillar.key).html() + '" size="10" /></td>' +
-							'<td><input type="text" name="pillar_label" value="' + $('<span>').text(pillar.label).html() + '" /></td>';
+						// Create new row matching PHP template structure.
+						var idx = nextIndex++;
+						var html = '<tr data-index="' + idx + '">' +
+							'<td><input type="text" name="pillars[' + idx + '][key]" class="small-text" value="' + $('<span>').text(pillar.key).html() + '" /></td>' +
+							'<td><input type="text" name="pillars[' + idx + '][label]" class="regular-text" value="' + $('<span>').text(pillar.label).html() + '" /></td>';
 						langCodes.forEach(function(code) {
 							var slug = (pillar.categories && pillar.categories[code]) || '';
-							html += '<td><input type="text" data-lang-cat="' + code + '" value="' + $('<span>').text(slug).html() + '" size="12" /></td>';
+							html += '<td><input type="text" name="pillars[' + idx + '][categories][' + code + ']" class="small-text" value="' + $('<span>').text(slug).html() + '" /></td>';
 						});
-						html += '<td><textarea name="pillar_context" rows="2" cols="30">' + $('<span>').text(pillar.context || '').html() + '</textarea></td>' +
-							'<td><a href="#" class="inkbridge-gen-remove-row remove-row">&times;</a></td>' +
+						html += '<td><textarea name="pillars[' + idx + '][context]" rows="2" class="large-text">' + $('<span>').text(pillar.context || '').html() + '</textarea></td>' +
+							'<td><button type="button" class="button button-small inkbridge-gen-remove-pillar">Remove</button></td>' +
 							'</tr>';
 						$tbody.append(html);
 					}
@@ -293,8 +306,100 @@
 		});
 	});
 
-	// Remove row.
-	$(document).on('click', '.inkbridge-gen-remove-row', function(e) {
+	// Generate languages from categories.
+	$(document).on('click', '#inkbridge-gen-generate-languages', function(e) {
+		e.preventDefault();
+		var $btn = $(this);
+
+		// Show inline WP-style confirmation if not yet confirmed.
+		if (!$btn.data('confirmed')) {
+			var $confirm = $('<div class="notice notice-warning inline inkbridge-gen-generate-confirm" style="margin:12px 0;padding:10px 14px;display:flex;align-items:center;gap:12px;">' +
+				'<p style="margin:0;flex:1;">This will detect languages from your top-level WordPress categories using AI and add/update the languages table.</p>' +
+				'<button type="button" class="button button-primary inkbridge-gen-confirm-yes">Continue</button>' +
+				'<button type="button" class="button inkbridge-gen-confirm-no">Cancel</button>' +
+				'</div>');
+			$btn.closest('p').after($confirm);
+			$btn.prop('disabled', true);
+
+			$confirm.on('click', '.inkbridge-gen-confirm-yes', function() {
+				$confirm.remove();
+				$btn.data('confirmed', true).prop('disabled', false).trigger('click');
+			});
+			$confirm.on('click', '.inkbridge-gen-confirm-no', function() {
+				$confirm.remove();
+				$btn.prop('disabled', false);
+			});
+			return;
+		}
+
+		$btn.data('confirmed', false);
+		var $status = $('#inkbridge-gen-generate-languages-status');
+		var $tbody = $('#inkbridge-gen-languages-body');
+
+		$btn.prop('disabled', true);
+		$status.text('Detecting languages...').removeClass('success error');
+
+		InkbridgeGen.ajax('inkbridge_gen_generate_languages')
+		.done(function(response) {
+			if (response.success && response.data.languages) {
+				var languages = response.data.languages;
+				var nextIndex = $tbody.find('tr').length;
+
+				// Uncheck all source checkboxes first.
+				$tbody.find('input[name$="[is_source]"]').prop('checked', false);
+
+				languages.forEach(function(lang) {
+					// Check if a row with this code already exists.
+					var $existingRow = null;
+					$tbody.find('tr').each(function() {
+						var $row = $(this);
+						var codeInput = $row.find('input[name$="[code]"]');
+						if (codeInput.length && codeInput.val() === lang.code) {
+							$existingRow = $row;
+							return false;
+						}
+					});
+
+					if ($existingRow) {
+						// Update existing row.
+						$existingRow.find('input[name$="[name]"]').val(lang.name);
+						$existingRow.find('input[name$="[hreflang]"]').val(lang.hreflang);
+						$existingRow.find('input[name$="[parent_category]"]').val(lang.parent_category);
+						$existingRow.find('input[name$="[is_source]"]').prop('checked', !!lang.is_source);
+					} else {
+						// Create new row matching PHP template structure.
+						var idx = nextIndex++;
+						var html = '<tr data-index="' + idx + '">' +
+							'<td><input type="text" name="languages[' + idx + '][code]" class="small-text" value="' + $('<span>').text(lang.code).html() + '" /></td>' +
+							'<td><input type="text" name="languages[' + idx + '][name]" class="regular-text" value="' + $('<span>').text(lang.name).html() + '" /></td>' +
+							'<td><input type="text" name="languages[' + idx + '][hreflang]" class="small-text" value="' + $('<span>').text(lang.hreflang).html() + '" /></td>' +
+							'<td><input type="text" name="languages[' + idx + '][parent_category]" class="regular-text" value="' + $('<span>').text(lang.parent_category).html() + '" /></td>' +
+							'<td><input type="checkbox" name="languages[' + idx + '][is_source]" value="1" class="inkbridge-gen-source-checkbox"' + (lang.is_source ? ' checked' : '') + ' /></td>' +
+							'<td><button type="button" class="button button-small inkbridge-gen-remove-language">Remove</button></td>' +
+							'</tr>';
+						$tbody.append(html);
+					}
+				});
+
+				$status.text(response.data.message).addClass('success');
+				InkbridgeGen.notify(response.data.message);
+			} else {
+				var msg = (response.data && response.data.message) || 'Failed to detect languages.';
+				$status.text(msg).addClass('error');
+				InkbridgeGen.notify(msg, 'error');
+			}
+		})
+		.fail(function() {
+			$status.text('Request failed.').addClass('error');
+			InkbridgeGen.notify('Failed to detect languages.', 'error');
+		})
+		.always(function() {
+			$btn.prop('disabled', false);
+		});
+	});
+
+	// Remove row (languages and pillars).
+	$(document).on('click', '.inkbridge-gen-remove-row, .inkbridge-gen-remove-language, .inkbridge-gen-remove-pillar', function(e) {
 		e.preventDefault();
 		$(this).closest('tr').remove();
 	});

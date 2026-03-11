@@ -64,6 +64,10 @@ $languages = $settings->get_languages();
 		<button type="button" id="inkbridge-gen-add-language" class="button button-secondary">
 			<?php esc_html_e( 'Add Language', 'inkbridge-gen' ); ?>
 		</button>
+		<button type="button" id="inkbridge-gen-generate-languages" class="button button-secondary" style="margin-left: 8px;">
+			<?php esc_html_e( 'Generate from Categories', 'inkbridge-gen' ); ?>
+		</button>
+		<span id="inkbridge-gen-generate-languages-status" style="margin-left: 8px;"></span>
 	</p>
 
 	<!-- Template row for JS (hidden) -->

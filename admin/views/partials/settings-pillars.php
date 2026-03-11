@@ -16,7 +16,7 @@ $languages = $settings->get_languages();
 				<th><?php esc_html_e( 'Key', 'inkbridge-gen' ); ?></th>
 				<th><?php esc_html_e( 'Label', 'inkbridge-gen' ); ?></th>
 				<?php foreach ( $languages as $lang ) : ?>
-					<th>
+					<th data-lang-code="<?php echo esc_attr( $lang['code'] ); ?>">
 						<?php
 						printf(
 							/* translators: %s: language name */

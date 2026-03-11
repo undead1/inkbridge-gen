@@ -19,6 +19,7 @@ class Inkbridge_Gen_Admin_Ajax {
 			'inkbridge_gen_test_provider',
 			'inkbridge_gen_suggest_topic',
 			'inkbridge_gen_generate_pillars',
+			'inkbridge_gen_generate_languages',
 			'inkbridge_gen_save_settings',
 		);
 
@@ -543,6 +544,131 @@ class Inkbridge_Gen_Admin_Ajax {
 			wp_send_json_success( array(
 				'pillars' => $clean_pillars,
 				'message' => sprintf( __( '%d pillars generated.', 'inkbridge-gen' ), count( $clean_pillars ) ),
+			) );
+		} catch ( \Throwable $e ) {
+			wp_send_json_error( array( 'message' => $e->getMessage() ) );
+		}
+	}
+
+	// ─── Language Generation ────────────────────────────
+
+	public function generate_languages() {
+		$this->verify_request();
+
+		$settings = new Inkbridge_Gen_Settings();
+
+		// Check text provider is configured.
+		$tp_id  = $settings->get_active_text_provider();
+		$tp_key = $settings->get_provider_api_key( $tp_id );
+		if ( ! $tp_id || ! $tp_key ) {
+			wp_send_json_error( array( 'message' => __( 'No text provider configured. Please set up a text provider with an API key in Text Providers settings first.', 'inkbridge-gen' ) ) );
+		}
+
+		// Get top-level categories only.
+		$top_cats = get_categories( array(
+			'hide_empty' => false,
+			'parent'     => 0,
+			'orderby'    => 'name',
+			'order'      => 'ASC',
+		) );
+
+		if ( empty( $top_cats ) ) {
+			wp_send_json_error( array( 'message' => __( 'No top-level WordPress categories found.', 'inkbridge-gen' ) ) );
+		}
+
+		// Build category listing with child counts, skip "Uncategorized".
+		$cat_listing = array();
+		foreach ( $top_cats as $cat ) {
+			if ( 'uncategorized' === $cat->slug ) {
+				continue;
+			}
+			$children = get_categories( array(
+				'hide_empty' => false,
+				'parent'     => $cat->term_id,
+			) );
+			$child_count    = count( $children );
+			$cat_listing[] = $cat->name . ' (slug: ' . $cat->slug . ') — ' . $child_count . ' child categories';
+		}
+
+		if ( empty( $cat_listing ) ) {
+			wp_send_json_error( array( 'message' => __( 'No usable top-level categories found (only "Uncategorized").', 'inkbridge-gen' ) ) );
+		}
+
+		// Existing languages for context.
+		$existing_languages = $settings->get_languages();
+		$existing_info      = '';
+		if ( ! empty( $existing_languages ) ) {
+			$lang_descs = array();
+			foreach ( $existing_languages as $l ) {
+				$lang_descs[] = $l['code'] . ' ("' . $l['name'] . '", parent: ' . ( $l['parent_category'] ?: 'none' ) . ')';
+			}
+			$existing_info = "\nExisting languages: " . implode( ', ', $lang_descs ) . "\n";
+		}
+
+		$system_prompt = 'You are a multilingual web expert. Analyze WordPress categories and identify which top-level categories represent language sections. Return ONLY a valid JSON array, no other text.';
+
+		$user_prompt = "Analyze these top-level WordPress categories and identify which ones represent language sections of the site.\n\n"
+			. "Top-level categories:\n- " . implode( "\n- ", $cat_listing ) . "\n"
+			. $existing_info
+			. "\nInstructions:\n"
+			. "- Identify categories that represent languages or locales (e.g. 'English', 'Malay', 'Chinese', 'Bahasa Melayu')\n"
+			. "- Skip categories that are clearly content topics, not languages\n"
+			. "- For each identified language, provide: code (ISO 639-1), name (English name), hreflang (BCP 47 tag), parent_category (the exact WordPress slug), is_source (true for one language — prefer English or the most prominent one)\n"
+			. "- If existing languages match, keep their codes\n"
+			. "- Only one language should have is_source set to true\n"
+			. "\nReturn a JSON array:\n"
+			. '[{"code":"en","name":"English","hreflang":"en","parent_category":"english","is_source":true},{"code":"ms","name":"Malay","hreflang":"ms-MY","parent_category":"malay","is_source":false}]';
+
+		try {
+			$tp_cfg        = $settings->get_text_provider_config( $tp_id );
+			$text_provider = Inkbridge_Gen_Provider_Factory::create_text_provider( $tp_id, $tp_key, $tp_cfg['model'] ?? '' );
+
+			$result  = $text_provider->generate( $system_prompt, $user_prompt, 1000 );
+			$content = trim( $result['content'] );
+
+			// Extract JSON from response (handle markdown code blocks).
+			if ( preg_match( '/\[[\s\S]*\]/', $content, $matches ) ) {
+				$content = $matches[0];
+			}
+
+			$languages = json_decode( $content, true );
+
+			if ( ! is_array( $languages ) || empty( $languages ) ) {
+				wp_send_json_error( array( 'message' => __( 'AI returned invalid data. Please try again.', 'inkbridge-gen' ) ) );
+			}
+
+			// Sanitize the response.
+			$clean_languages = array();
+			$has_source      = false;
+			foreach ( $languages as $l ) {
+				if ( empty( $l['code'] ) || empty( $l['name'] ) ) {
+					continue;
+				}
+				$is_source = ! empty( $l['is_source'] ) && ! $has_source;
+				if ( $is_source ) {
+					$has_source = true;
+				}
+				$clean_languages[] = array(
+					'code'            => sanitize_key( $l['code'] ),
+					'name'            => sanitize_text_field( $l['name'] ),
+					'hreflang'        => sanitize_text_field( $l['hreflang'] ?? $l['code'] ),
+					'parent_category' => sanitize_title( $l['parent_category'] ?? '' ),
+					'is_source'       => $is_source,
+				);
+			}
+
+			// Ensure at least one source language.
+			if ( ! $has_source && ! empty( $clean_languages ) ) {
+				$clean_languages[0]['is_source'] = true;
+			}
+
+			if ( empty( $clean_languages ) ) {
+				wp_send_json_error( array( 'message' => __( 'No languages could be identified from your categories. Please try again or add languages manually.', 'inkbridge-gen' ) ) );
+			}
+
+			wp_send_json_success( array(
+				'languages' => $clean_languages,
+				'message'   => sprintf( __( '%d languages detected.', 'inkbridge-gen' ), count( $clean_languages ) ),
 			) );
 		} catch ( \Throwable $e ) {
 			wp_send_json_error( array( 'message' => $e->getMessage() ) );
