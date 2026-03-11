@@ -1,0 +1,13 @@
+{
+    "name": "undead1/inkbridge-gen",
+    "description": "AI-powered content generation, translation, and publishing pipeline for WordPress.",
+    "type": "wordpress-plugin",
+    "license": "GPL-2.0-or-later",
+    "require": {
+        "php": ">=8.0",
+        "yahnis-elsts/plugin-update-checker": "^5.6"
+    },
+    "config": {
+        "optimize-autoloader": true
+    }
+}
